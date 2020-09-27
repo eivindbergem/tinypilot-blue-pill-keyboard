@@ -1,7 +1,6 @@
 #include <stddef.h>
 
 #include <libopencm3/stm32/rcc.h>
-#include <libopencm3/stm32/gpio.h>
 #include <libopencm3/cm3/nvic.h>
 
 #include <libopencm3/usb/usbd.h>
@@ -174,25 +173,7 @@ static void hid_set_config(usbd_device *dev, uint16_t wValue)
 
 
 void usb_init(void) {
-
-	rcc_periph_clock_enable(RCC_GPIOA);
         rcc_periph_clock_enable(RCC_USB);
-
-	gpio_clear(GPIOA, GPIO12);
-	gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ,
-		GPIO_CNF_OUTPUT_OPENDRAIN, GPIO12);
-	/*
-	 * This is a somewhat common cheap hack to trigger device re-enumeration
-	 * on startup.  Assuming a fixed external pullup on D+, (For USB-FS)
-	 * setting the pin to output, and driving it explicitly low effectively
-	 * "removes" the pullup.  The subsequent USB init will "take over" the
-	 * pin, and it will appear as a proper pullup to the host.
-	 * The magic delay is somewhat arbitrary, no guarantees on USBIF
-	 * compliance here, but "it works" in most places.
-	 */
-	for (unsigned i = 0; i < 800000; i++) {
-	 	__asm__("nop");
-        }
 
 	usbd_dev = usbd_init(&st_usbfs_v1_usb_driver, &dev_descr, &config,
                              usb_strings, 3, usbd_control_buffer,
