@@ -23,19 +23,25 @@ static void next_packet(void) {
 
 void usart1_isr(void) {
     if (usart_get_flag(USART1, USART_SR_RXNE)) {
-        timer_set_counter(TIM2, 0);
         packet->data[packet->pos++] = usart_recv(USART1);
 
         if (packet->pos == sizeof(packet->data)) {
+            timer_disable_counter(TIM2);
+            timer_set_counter(TIM2, 0);
+
             usb_write_key(packet);
             next_packet();
+        } else {
+            timer_set_counter(TIM2, 0);
+            timer_enable_counter(TIM2);
         }
     }
 }
 
-
 void tim2_isr(void) {
     timer_clear_flag(TIM2, TIM_SR_UIF);
+    timer_disable_counter(TIM2);
+    timer_set_counter(TIM2, 0);
     next_packet();
 }
 
@@ -46,14 +52,19 @@ void uart_init(void) {
     rcc_periph_clock_enable(RCC_USART1);
     rcc_periph_clock_enable(RCC_TIM2);
 
+    /* Because we are just receiving a stream of characters, we don't
+     * really know the borders of each HID report. But, we can
+     * identify each report based on time. Each 8 byte report is
+     * written in one go and there is likely to be delays between
+     * reports. Using a timer, we reset the packet if too much time
+     * passes between bytes. */
     timer_set_mode(TIM2, TIM_CR1_CKD_CK_INT,
                TIM_CR1_CMS_EDGE, TIM_CR1_DIR_UP);
     timer_set_period(TIM2, TIMEOUT);
-    timer_enable_counter(TIM2);
     timer_enable_irq(TIM2, TIM_DIER_UIE);
 
     nvic_enable_irq(NVIC_TIM2_IRQ);
-    nvic_set_priority(NVIC_TIM2_IRQ, 1);
+    nvic_set_priority(NVIC_TIM2_IRQ, 3);
 
     gpio_set_mode(GPIO_BANK_USART1_RX, GPIO_MODE_INPUT,
 		      GPIO_CNF_INPUT_FLOAT, GPIO_USART1_RX);
@@ -68,6 +79,6 @@ void uart_init(void) {
     usart_set_mode(USART1, USART_MODE_RX);
     usart_enable(USART1);
 
-    nvic_set_priority(NVIC_USART1_IRQ, 5);
+    nvic_set_priority(NVIC_USART1_IRQ, 2);
     nvic_enable_irq(NVIC_USART1_IRQ);
 }
